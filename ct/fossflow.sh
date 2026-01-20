@@ -242,7 +242,8 @@ function update_script() {
     msg_ok "No update required. ${APP} is already at v${RELEASE}"
   else
     msg_info "Updating ${APP} to v${RELEASE}"
-    systemctl stop fossflow
+    systemctl stop fossflow-frontend
+    systemctl stop fossflow-backend
     cd /opt/fossflow
     git fetch --all --tags --prune
     git checkout "v${RELEASE}"
@@ -250,7 +251,8 @@ function update_script() {
     npm run build:lib &>/dev/null
     npm run build:app &>/dev/null
     echo "${RELEASE}" >/opt/${APP}_version.txt
-    systemctl start fossflow
+    systemctl start fossflow-backend
+    systemctl start fossflow-frontend
     msg_ok "Updated ${APP} to v${RELEASE}"
   fi
   exit

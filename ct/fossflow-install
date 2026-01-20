@@ -59,34 +59,62 @@ npm run build:app &>/dev/null
 echo "${RELEASE}" >/opt/FossFLOW_version.txt
 msg_ok "Installed FossFLOW v${RELEASE}"
 
+msg_info "Installing serve for frontend"
+npm install -g serve &>/dev/null
+msg_ok "Installed serve"
+
 msg_info "Creating Data Directory"
 mkdir -p /opt/fossflow-data/diagrams
 msg_ok "Created Data Directory"
 
-msg_info "Creating Service"
-cat <<EOF >/etc/systemd/system/fossflow.service
+msg_info "Creating Backend Service"
+cat <<EOF >/etc/systemd/system/fossflow-backend.service
 [Unit]
-Description=FossFLOW Isometric Diagramming Tool
+Description=FossFLOW Backend API
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/fossflow
+WorkingDirectory=/opt/fossflow/packages/fossflow-backend
 Environment=NODE_ENV=production
-Environment=PORT=3000
+Environment=BACKEND_PORT=3001
 Environment=ENABLE_SERVER_STORAGE=true
 Environment=STORAGE_PATH=/opt/fossflow-data/diagrams
-ExecStart=/usr/bin/npm start
+ExecStart=/usr/bin/node server.js
 Restart=on-failure
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOF
+msg_ok "Created Backend Service"
+
+msg_info "Creating Frontend Service"
+cat <<EOF >/etc/systemd/system/fossflow-frontend.service
+[Unit]
+Description=FossFLOW Frontend
+After=network.target fossflow-backend.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/fossflow/packages/fossflow-app/dist
+Environment=NODE_ENV=production
+ExecStart=/usr/local/bin/serve -s . -l 3000 --no-port-switching
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+msg_ok "Created Frontend Service"
+
+msg_info "Starting Services"
 systemctl daemon-reload
-systemctl enable --now fossflow &>/dev/null
-msg_ok "Created Service"
+systemctl enable --now fossflow-backend &>/dev/null
+systemctl enable --now fossflow-frontend &>/dev/null
+msg_ok "Services Started"
 
 msg_info "Cleaning up"
 apt-get -y autoremove &>/dev/null
