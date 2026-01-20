@@ -1,113 +1,142 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+
 # Copyright (c) 2021-2025 community-scripts ORG
 # Author: Emilien-Etadam
 # License: MIT | https://github.com/Emilien-Etadam/FossFlow_LXC_Proxmox/raw/main/LICENSE
 # Source: https://github.com/stan-smith/FossFLOW
 
+# Color codes for output
+BL='\033[36m'
+RD='\033[01;31m'
+GN='\033[1;92m'
+YW='\033[1;33m'
+CL='\033[m'
+
+function msg_info() {
+  echo -e "${BL}[INFO]${CL} $1"
+}
+
+function msg_ok() {
+  echo -e "${GN}[OK]${CL} $1"
+}
+
+function msg_error() {
+  echo -e "${RD}[ERROR]${CL} $1"
+}
+
+# Default configuration
 APP="FossFLOW"
-var_tags="diagram;infrastructure"
-var_cpu="2"
-var_ram="1024"
-var_disk="4"
-var_os="debian"
-var_version="12"
-var_unprivileged="1"
+CTID=$(pvesh get /cluster/nextid)
+TEMPLATE="debian-12-standard"
+STORAGE="local"
+DISK_SIZE="4"
+CPU_CORES="2"
+RAM_SIZE="1024"
+BRIDGE="vmbr0"
+HOSTNAME="fossflow"
+PASSWORD=$(openssl rand -base64 12)
 
-header_info "$APP"
-variables
-color
-catch_errors
+# Display configuration
+clear
+cat << "EOF"
+    ______              ______ __    ______ _       __
+   / ____/___  _________/ ____// /   / __ \ |     / /
+  / /_  / __ \/ ___/ ___/ /_  / /   / / / / | /| / /
+ / __/ / /_/ (__  |__  ) __/ / /___/ /_/ /| |/ |/ /
+/_/    \____/____/____/_/   /_____/\____/ |__/|__/
 
-function update_script() {
-  header_info
-  check_container_storage
-  check_container_resources
+EOF
 
-  if [[ ! -d /opt/fossflow ]]; then
-    msg_error "No ${APP} Installation Found!"
-    exit
+msg_info "Using Default Settings"
+echo -e "  🆔  Container ID: ${BL}${CTID}${CL}"
+echo -e "  🖥️  Operating System: ${BL}Debian 12${CL}"
+echo -e "  📦  Container Type: ${BL}Unprivileged${CL}"
+echo -e "  💾  Disk Size: ${BL}${DISK_SIZE} GB${CL}"
+echo -e "  🧠  CPU Cores: ${BL}${CPU_CORES}${CL}"
+echo -e "  🛠️  RAM Size: ${BL}${RAM_SIZE} MiB${CL}"
+echo -e ""
+msg_info "Creating a ${APP} LXC using the above default settings"
+echo -e ""
+
+# Check if template exists
+msg_info "Checking for template"
+TEMPLATE_FILE=$(pveam list $STORAGE | grep -m 1 "$TEMPLATE" | awk '{print $1}')
+if [ -z "$TEMPLATE_FILE" ]; then
+  msg_info "Downloading template..."
+  pveam download $STORAGE $TEMPLATE-*.tar.zst || {
+    msg_error "Failed to download template"
+    exit 1
+  }
+  TEMPLATE_FILE=$(pveam list $STORAGE | grep -m 1 "$TEMPLATE" | awk '{print $1}')
+fi
+msg_ok "Template: $TEMPLATE_FILE"
+
+# Create container
+msg_info "Creating LXC Container"
+pct create $CTID $STORAGE:vztmpl/$TEMPLATE_FILE \
+  -arch amd64 \
+  -cores $CPU_CORES \
+  -description "FossFLOW - Isometric Infrastructure Diagram Tool" \
+  -features nesting=1 \
+  -hostname $HOSTNAME \
+  -memory $RAM_SIZE \
+  -net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
+  -onboot 1 \
+  -ostype debian \
+  -password $PASSWORD \
+  -rootfs $STORAGE:$DISK_SIZE \
+  -swap 512 \
+  -unprivileged 1 || {
+    msg_error "Failed to create container"
+    exit 1
+  }
+msg_ok "LXC Container $CTID was successfully created"
+
+# Start container
+msg_info "Starting LXC Container"
+pct start $CTID
+sleep 5
+msg_ok "Started LXC Container"
+
+# Wait for network
+msg_info "Waiting for network..."
+for i in {1..30}; do
+  if pct exec $CTID -- ping -c 1 8.8.8.8 &>/dev/null; then
+    msg_ok "Network is ready"
+    break
   fi
-
-  RELEASE=$(curl -fsSL https://api.github.com/repos/stan-smith/FossFLOW/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4)}')
-  if [[ -f /opt/${APP}_version.txt ]] && [[ "${RELEASE}" == "$(cat /opt/${APP}_version.txt)" ]]; then
-    msg_ok "No update required. ${APP} is already at v${RELEASE}"
-  else
-    msg_info "Updating ${APP} to v${RELEASE}"
-    systemctl stop fossflow
-    cd /opt/fossflow
-    git fetch --all --tags --prune
-    git checkout "v${RELEASE}"
-    npm install &>/dev/null
-    npm run build:lib &>/dev/null
-    npm run build:app &>/dev/null
-    echo "${RELEASE}" >/opt/${APP}_version.txt
-    systemctl start fossflow
-    msg_ok "Updated ${APP} to v${RELEASE}"
+  if [ $i -eq 30 ]; then
+    msg_error "Network timeout"
+    exit 1
   fi
-  exit
-}
-
-start
-
-# Custom build_container function for external repository
-function build_container() {
-  msg_info "Creating LXC Container"
-  DISK_REF="$DISK_SIZE"
-  if [ "$var_os" == "alpine" ]; then
-    OSTYPE=alpine
-    OSVERSION=${OSVERSION:-3.19}
-    TEMPLATE="$CTID:vztmpl/$var_os-$var_version-default_*_amd64.tar.xz"
-  else
-    OSTYPE=$var_os
-    OSVERSION=$var_version
-    TEMPLATE="$CTID:vztmpl/$var_os-$var_version-standard_*_amd64.tar.zst"
-  fi
-
-  pct create "$CTID" "$PCT_OSTEMPLATE" \
-    -arch $(dpkg --print-architecture) \
-    -cores "$CORE_COUNT" \
-    -description "<div align='center'><img src='https://raw.githubusercontent.com/stan-smith/FossFLOW/master/packages/fossflow-app/public/favicon.svg' width='50'/><h3>FossFLOW LXC</h3></div>" \
-    -features nesting=$var_nesting \
-    -hostname "$HN" \
-    -memory "$RAM_SIZE" \
-    -net0 name=eth0,bridge=$BRG,ip=$NET \
-    -onboot 1 \
-    -ostype "$OSTYPE" \
-    -password "$PW" \
-    -rootfs $DISK_REF \
-    -swap "$var_swap" \
-    -tags proxmox-helper-scripts \
-    -unprivileged $var_unprivileged
-  msg_ok "LXC Container $CTID was successfully created"
-
-  msg_info "Starting LXC Container"
-  pct start "$CTID"
-  msg_ok "Started LXC Container"
-
-  msg_info "Configuring LXC Container"
   sleep 2
-  pct push "$CTID" <(echo "export FUNCTIONS_FILE_PATH='$FUNCTIONS_FILE_PATH'") /etc/profile.d/env.sh
+done
 
-  # Download and execute install script from this repository
-  INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/Emilien-Etadam/FossFlow_LXC_Proxmox/main/ct/fossflow-install"
-  INSTALL_SCRIPT=$(curl -fsSL "$INSTALL_SCRIPT_URL") || {
-    msg_error "Failed to download install script from $INSTALL_SCRIPT_URL"
-    exit 1
-  }
-
-  pct exec "$CTID" -- bash -c "$INSTALL_SCRIPT" || {
-    msg_error "Installation failed"
-    exit 1
-  }
-
-  msg_ok "Customized LXC Container"
+# Download and execute install script
+msg_info "Downloading installation script"
+INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/Emilien-Etadam/FossFlow_LXC_Proxmox/main/ct/fossflow-install"
+INSTALL_SCRIPT=$(curl -fsSL "$INSTALL_SCRIPT_URL") || {
+  msg_error "Failed to download install script from $INSTALL_SCRIPT_URL"
+  exit 1
 }
+msg_ok "Downloaded installation script"
 
-build_container
-description
+msg_info "Installing FossFLOW (this may take several minutes...)"
+pct exec $CTID -- bash -c "$INSTALL_SCRIPT" || {
+  msg_error "Installation failed"
+  exit 1
+}
+msg_ok "FossFLOW installed successfully"
 
-msg_ok "Completed Successfully!\n"
-echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:3000${CL}"
+# Get IP address
+IP=$(pct exec $CTID -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+
+msg_ok "Completed Successfully!"
+echo -e ""
+echo -e "${GN}🚀  FossFLOW setup has been successfully initialized!${CL}"
+echo -e "${YW}💡   Access it using the following URL:${CL}"
+echo -e "    ${GN}🌐  http://${IP}:3000${CL}"
+echo -e ""
+echo -e "${YW}📝  Container ID: ${CL}${CTID}"
+echo -e "${YW}🔐  Root Password: ${CL}${PASSWORD}"
+echo -e ""
