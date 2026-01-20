@@ -28,21 +28,49 @@ function msg_error() {
 APP="FossFLOW"
 CTID=$(pvesh get /cluster/nextid)
 TEMPLATE="debian-12-standard"
-TEMPLATE_STORAGE="local"
-
-# Find a storage that supports containers
-CONTAINER_STORAGE=$(pvesm status -content rootdir | awk 'NR>1 {print $1}' | head -1)
-if [ -z "$CONTAINER_STORAGE" ]; then
-  echo -e "${RD}[ERROR]${CL} No storage found that supports containers"
-  exit 1
-fi
-
 DISK_SIZE="4"
 CPU_CORES="2"
 RAM_SIZE="1024"
 BRIDGE="vmbr0"
 HOSTNAME="fossflow"
 PASSWORD=$(openssl rand -base64 12)
+
+# Function to select storage
+function select_storage() {
+  local storage_type=$1
+  local content_type=$2
+
+  mapfile -t STORAGE_MENU < <(pvesm status -content "$content_type" | awk 'NR>1 {print $1}')
+
+  if [ ${#STORAGE_MENU[@]} -eq 0 ]; then
+    msg_error "No storage found that supports $content_type"
+    exit 1
+  fi
+
+  if [ ${#STORAGE_MENU[@]} -eq 1 ]; then
+    echo "${STORAGE_MENU[0]}"
+    return
+  fi
+
+  msg_info "Select $storage_type storage:"
+  PS3="Enter selection: "
+  select storage in "${STORAGE_MENU[@]}"; do
+    if [[ -n "$storage" ]]; then
+      echo "$storage"
+      return
+    else
+      msg_error "Invalid selection"
+    fi
+  done
+}
+
+# Select storage for templates
+msg_info "Selecting storage for templates..."
+TEMPLATE_STORAGE=$(select_storage "Template" "vztmpl")
+
+# Select storage for containers
+msg_info "Selecting storage for container..."
+CONTAINER_STORAGE=$(select_storage "Container" "rootdir")
 
 # Display configuration
 clear
