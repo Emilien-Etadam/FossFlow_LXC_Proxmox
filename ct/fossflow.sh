@@ -35,31 +35,53 @@ BRIDGE="vmbr0"
 HOSTNAME="fossflow"
 PASSWORD=$(openssl rand -base64 12)
 
-# Function to select storage
+# Function to select storage with detailed info
 function select_storage() {
   local storage_type=$1
   local content_type=$2
 
-  mapfile -t STORAGE_MENU < <(pvesm status -content "$content_type" | awk 'NR>1 {print $1}')
+  # Get storage info with usage
+  mapfile -t STORAGE_LIST < <(pvesm status -content "$content_type" | awk 'NR>1')
 
-  if [ ${#STORAGE_MENU[@]} -eq 0 ]; then
+  if [ ${#STORAGE_LIST[@]} -eq 0 ]; then
     msg_error "No storage found that supports $content_type"
     exit 1
   fi
 
+  # Extract just storage names for menu
+  mapfile -t STORAGE_MENU < <(printf '%s\n' "${STORAGE_LIST[@]}" | awk '{print $1}')
+
   if [ ${#STORAGE_MENU[@]} -eq 1 ]; then
-    echo "${STORAGE_MENU[0]}"
+    STORAGE_NAME="${STORAGE_MENU[0]}"
+    # Get storage info
+    STORAGE_INFO=$(printf '%s\n' "${STORAGE_LIST[@]}" | grep "^$STORAGE_NAME")
+    msg_ok "Using storage: $STORAGE_NAME"
+    echo "$STORAGE_NAME"
     return
   fi
 
-  msg_info "Select $storage_type storage:"
-  PS3="Enter selection: "
-  select storage in "${STORAGE_MENU[@]}"; do
-    if [[ -n "$storage" ]]; then
-      echo "$storage"
+  # Display storage options with details
+  echo ""
+  msg_info "Available $storage_type storage:"
+  for i in "${!STORAGE_LIST[@]}"; do
+    local line="${STORAGE_LIST[$i]}"
+    local name=$(echo "$line" | awk '{print $1}')
+    local type=$(echo "$line" | awk '{print $2}')
+    local avail=$(echo "$line" | awk '{print $4}')
+    local used=$(echo "$line" | awk '{print $5}')
+    printf "  %d) ${BL}%-12s${CL} [%s] (Free: %s  Used: %s)\n" $((i+1)) "$name" "$type" "$avail" "$used"
+  done
+  echo ""
+
+  while true; do
+    read -p "Select storage [1-${#STORAGE_MENU[@]}]: " choice
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#STORAGE_MENU[@]}" ]; then
+      SELECTED="${STORAGE_MENU[$((choice-1))]}"
+      msg_ok "Selected: $SELECTED"
+      echo "$SELECTED"
       return
     else
-      msg_error "Invalid selection"
+      msg_error "Invalid selection. Please enter a number between 1 and ${#STORAGE_MENU[@]}"
     fi
   done
 }
@@ -112,7 +134,8 @@ else
   msg_info "Fetching available templates..."
   pveam update >/dev/null 2>&1 || true
 
-  TEMPLATE_NAME=$(pveam available -section system | grep "debian-12-standard" | head -1 | awk '{print $2}')
+  # Get template name without spaces - using column 2 from system section
+  TEMPLATE_NAME=$(pveam available | awk '/system.*debian-12-standard/ {print $2; exit}')
 
   if [ -z "$TEMPLATE_NAME" ]; then
     msg_error "Could not find debian-12-standard template"
@@ -120,7 +143,8 @@ else
   fi
 
   msg_info "Downloading template: $TEMPLATE_NAME"
-  pveam download $TEMPLATE_STORAGE $TEMPLATE_NAME || {
+  # Use quotes to prevent word splitting
+  pveam download "$TEMPLATE_STORAGE" "$TEMPLATE_NAME" || {
     msg_error "Failed to download template"
     exit 1
   }
