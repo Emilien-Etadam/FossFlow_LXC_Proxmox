@@ -60,20 +60,22 @@ echo -e ""
 
 # Check if template exists
 msg_info "Checking for template"
-TEMPLATE_FILE=$(pveam list $STORAGE | grep -m 1 "$TEMPLATE" | awk '{print $1}')
-if [ -z "$TEMPLATE_FILE" ]; then
-  msg_info "Downloading template..."
-  pveam download $STORAGE $TEMPLATE-*.tar.zst || {
+TEMPLATE_FILE=$(pveam available | grep -m 1 "debian-12-standard" | awk '{print $2}')
+TEMPLATE_NAME=$(basename $TEMPLATE_FILE)
+
+# Check if already downloaded
+if ! pveam list $STORAGE | grep -q "$TEMPLATE_NAME"; then
+  msg_info "Downloading template $TEMPLATE_NAME..."
+  pveam download $STORAGE $TEMPLATE_NAME || {
     msg_error "Failed to download template"
     exit 1
   }
-  TEMPLATE_FILE=$(pveam list $STORAGE | grep -m 1 "$TEMPLATE" | awk '{print $1}')
 fi
-msg_ok "Template: $TEMPLATE_FILE"
+msg_ok "Template: $TEMPLATE_NAME"
 
 # Create container
 msg_info "Creating LXC Container"
-pct create $CTID $STORAGE:vztmpl/$TEMPLATE_FILE \
+pct create $CTID $STORAGE:vztmpl/$TEMPLATE_NAME \
   -arch amd64 \
   -cores $CPU_CORES \
   -description "FossFLOW - Isometric Infrastructure Diagram Tool" \
