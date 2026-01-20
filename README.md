@@ -1,6 +1,6 @@
 # FossFLOW LXC Script for Proxmox VE
 
-Script d'installation automatisé de [FossFLOW](https://github.com/stan-smith/FossFLOW) dans un conteneur LXC Proxmox, style [community-scripts](https://github.com/community-scripts/ProxmoxVE).
+Script d'installation automatisé de [FossFLOW](https://github.com/stan-smith/FossFLOW) dans un conteneur LXC Proxmox, compatible avec le standard [VE Helper Scripts](https://github.com/community-scripts/ProxmoxVE).
 
 ## 🚀 Installation
 
@@ -10,11 +10,19 @@ Exécuter dans le shell Proxmox :
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Emilien-Etadam/FossFlow_LXC_Proxmox/main/ct/fossflow.sh)"
 ```
 
+Le script vous guidera à travers :
+1. **Sélection du storage pour templates** (auto-sélection si un seul disponible)
+2. **Sélection du storage pour le conteneur** (avec affichage de l'espace libre)
+3. **Téléchargement du template Debian 12** (si nécessaire)
+4. **Création et configuration du conteneur LXC**
+5. **Installation de Node.js 20.x et FossFLOW**
+
 ## 📋 Configuration par défaut
 
 | Paramètre | Valeur |
 |-----------|--------|
 | OS | Debian 12 |
+| Type | Unprivileged |
 | CPU | 2 cores |
 | RAM | 1024 MB |
 | Disk | 4 GB |
