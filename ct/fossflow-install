@@ -5,35 +5,57 @@
 # License: MIT | https://github.com/Emilien-Etadam/FossFlow_LXC_Proxmox/raw/main/LICENSE
 # Source: https://github.com/stan-smith/FossFLOW
 
-source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
-color
-verb_ip6
-catch_errors
-setting_up_container
-network_check
-update_os
+set -e
+
+# Color codes
+BL='\033[36m'
+GN='\033[1;92m'
+RD='\033[01;31m'
+CL='\033[m'
+
+function msg_info() {
+  echo -e "${BL}[INFO]${CL} $1"
+}
+
+function msg_ok() {
+  echo -e "${GN}[OK]${CL} $1"
+}
+
+function msg_error() {
+  echo -e "${RD}[ERROR]${CL} $1"
+}
+
+msg_info "Starting FossFLOW installation"
+
+msg_info "Updating system"
+apt-get update &>/dev/null
+apt-get upgrade -y &>/dev/null
+msg_ok "System updated"
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
+apt-get install -y \
   curl \
   git \
   ca-certificates \
-  gnupg
+  gnupg &>/dev/null
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Node.js 20.x"
-$STD bash -c "$(curl -fsSL https://deb.nodesource.com/setup_20.x)"
-$STD apt-get install -y nodejs
+bash -c "$(curl -fsSL https://deb.nodesource.com/setup_20.x)" &>/dev/null
+apt-get install -y nodejs &>/dev/null
 msg_ok "Installed Node.js $(node -v)"
 
 msg_info "Installing FossFLOW"
 RELEASE=$(curl -fsSL https://api.github.com/repos/stan-smith/FossFLOW/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4)}')
+msg_info "Downloading FossFLOW v${RELEASE}"
 cd /opt
-git clone -b "v${RELEASE}" --depth 1 https://github.com/stan-smith/FossFLOW.git fossflow
+git clone -b "v${RELEASE}" --depth 1 https://github.com/stan-smith/FossFLOW.git fossflow &>/dev/null
 cd /opt/fossflow
-$STD npm install
-$STD npm run build:lib
-$STD npm run build:app
+
+msg_info "Building FossFLOW (this may take 5-10 minutes)"
+npm install &>/dev/null
+npm run build:lib &>/dev/null
+npm run build:app &>/dev/null
 echo "${RELEASE}" >/opt/FossFLOW_version.txt
 msg_ok "Installed FossFLOW v${RELEASE}"
 
@@ -63,13 +85,12 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable -q --now fossflow
+systemctl enable --now fossflow &>/dev/null
 msg_ok "Created Service"
 
-motd_ssh
-customize
-
 msg_info "Cleaning up"
-$STD apt-get -y autoremove
-$STD apt-get -y autoclean
+apt-get -y autoremove &>/dev/null
+apt-get -y autoclean &>/dev/null
 msg_ok "Cleaned"
+
+msg_ok "FossFLOW installation completed!"
