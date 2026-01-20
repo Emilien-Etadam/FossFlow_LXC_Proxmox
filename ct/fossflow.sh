@@ -75,7 +75,9 @@ msg_info "Checking for template"
 EXISTING_TEMPLATE=$(pveam list $TEMPLATE_STORAGE 2>/dev/null | grep "debian-12-standard" | head -1 | awk '{print $1}')
 
 if [ -n "$EXISTING_TEMPLATE" ]; then
-  TEMPLATE_NAME="$EXISTING_TEMPLATE"
+  # Extract just the filename from "storage:vztmpl/filename"
+  TEMPLATE_NAME=$(basename "$EXISTING_TEMPLATE")
+  TEMPLATE_PATH="$EXISTING_TEMPLATE"
   msg_ok "Template already downloaded: $TEMPLATE_NAME"
 else
   # List available templates and find debian-12-standard
@@ -94,12 +96,13 @@ else
     msg_error "Failed to download template"
     exit 1
   }
+  TEMPLATE_PATH="$TEMPLATE_STORAGE:vztmpl/$TEMPLATE_NAME"
   msg_ok "Template downloaded: $TEMPLATE_NAME"
 fi
 
 # Create container
 msg_info "Creating LXC Container"
-pct create $CTID $TEMPLATE_STORAGE:vztmpl/$TEMPLATE_NAME \
+pct create $CTID "$TEMPLATE_PATH" \
   -arch amd64 \
   -cores $CPU_CORES \
   -description "FossFLOW - Isometric Infrastructure Diagram Tool" \
