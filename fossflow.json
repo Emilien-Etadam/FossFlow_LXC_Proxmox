@@ -1,0 +1,40 @@
+{
+  "name": "FossFLOW",
+  "slug": "fossflow",
+  "categories": [
+    5
+  ],
+  "date_created": "2025-01-20",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 3000,
+  "documentation": "https://github.com/stan-smith/FossFLOW",
+  "website": "https://stan-smith.github.io/FossFLOW/",
+  "logo": "https://raw.githubusercontent.com/stan-smith/FossFLOW/master/packages/fossflow-app/public/favicon.svg",
+  "config_path": "/opt/fossflow-data/diagrams",
+  "description": "FossFLOW is a powerful, open-source Progressive Web App (PWA) for creating beautiful isometric infrastructure diagrams. Built with React and the Isoflow library, it features auto-save, offline support, multilingual interface, custom icon import, and server-side storage.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/fossflow.sh",
+      "resources": {
+        "cpu": 2,
+        "ram": 1024,
+        "hdd": 4,
+        "os": "Debian",
+        "version": "12"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "FossFLOW runs entirely in the browser. Server storage is enabled by default for persistent diagram storage.",
+      "type": "info"
+    }
+  ]
+}
