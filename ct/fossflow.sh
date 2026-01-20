@@ -44,7 +44,7 @@ function select_storage() {
   mapfile -t STORAGE_LIST < <(pvesm status -content "$content_type" | awk 'NR>1')
 
   if [ ${#STORAGE_LIST[@]} -eq 0 ]; then
-    msg_error "No storage found that supports $content_type"
+    msg_error "No storage found that supports $content_type" >&2
     exit 1
   fi
 
@@ -55,43 +55,41 @@ function select_storage() {
     STORAGE_NAME="${STORAGE_MENU[0]}"
     # Get storage info
     STORAGE_INFO=$(printf '%s\n' "${STORAGE_LIST[@]}" | grep "^$STORAGE_NAME")
-    msg_ok "Using storage: $STORAGE_NAME"
+    echo -e "${GN}✔️${CL}   Storage $STORAGE_NAME (${storage_type})" >&2
     echo "$STORAGE_NAME"
     return
   fi
 
-  # Display storage options with details
-  echo ""
-  msg_info "Available $storage_type storage:"
+  # Display storage options with details - redirect to stderr
+  echo "" >&2
+  echo -e "${BL}[INFO]${CL} Select $storage_type storage:" >&2
   for i in "${!STORAGE_LIST[@]}"; do
     local line="${STORAGE_LIST[$i]}"
     local name=$(echo "$line" | awk '{print $1}')
     local type=$(echo "$line" | awk '{print $2}')
     local avail=$(echo "$line" | awk '{print $4}')
     local used=$(echo "$line" | awk '{print $5}')
-    printf "  %d) ${BL}%-12s${CL} [%s] (Free: %s  Used: %s)\n" $((i+1)) "$name" "$type" "$avail" "$used"
+    printf "  %d) ${BL}%-12s${CL} (%s) [Free: %s  Used: %s]\n" $((i+1)) "$name" "$type" "$avail" "$used" >&2
   done
-  echo ""
+  echo "" >&2
 
   while true; do
-    read -p "Select storage [1-${#STORAGE_MENU[@]}]: " choice
+    read -p "Select storage [1-${#STORAGE_MENU[@]}]: " choice </dev/tty
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#STORAGE_MENU[@]}" ]; then
       SELECTED="${STORAGE_MENU[$((choice-1))]}"
-      msg_ok "Selected: $SELECTED"
+      echo -e "${GN}✔️${CL}   Storage $SELECTED [${STORAGE_LIST[$((choice-1))]}]" >&2
       echo "$SELECTED"
       return
     else
-      msg_error "Invalid selection. Please enter a number between 1 and ${#STORAGE_MENU[@]}"
+      echo -e "${RD}[ERROR]${CL} Invalid selection. Please enter a number between 1 and ${#STORAGE_MENU[@]}" >&2
     fi
   done
 }
 
 # Select storage for templates
-msg_info "Selecting storage for templates..."
 TEMPLATE_STORAGE=$(select_storage "Template" "vztmpl")
 
 # Select storage for containers
-msg_info "Selecting storage for container..."
 CONTAINER_STORAGE=$(select_storage "Container" "rootdir")
 
 # Display configuration
