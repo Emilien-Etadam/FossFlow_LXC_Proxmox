@@ -58,20 +58,34 @@ echo -e ""
 msg_info "Creating a ${APP} LXC using the above default settings"
 echo -e ""
 
-# Check if template exists
+# Check if template exists and download if needed
 msg_info "Checking for template"
-TEMPLATE_FILE=$(pveam available | grep -m 1 "debian-12-standard" | awk '{print $2}')
-TEMPLATE_NAME=$(basename $TEMPLATE_FILE)
 
-# Check if already downloaded
-if ! pveam list $STORAGE | grep -q "$TEMPLATE_NAME"; then
-  msg_info "Downloading template $TEMPLATE_NAME..."
+# First, check what's already downloaded
+EXISTING_TEMPLATE=$(pveam list $STORAGE 2>/dev/null | grep "debian-12-standard" | head -1 | awk '{print $1}')
+
+if [ -n "$EXISTING_TEMPLATE" ]; then
+  TEMPLATE_NAME="$EXISTING_TEMPLATE"
+  msg_ok "Template already downloaded: $TEMPLATE_NAME"
+else
+  # List available templates and find debian-12-standard
+  msg_info "Fetching available templates..."
+  pveam update >/dev/null 2>&1 || true
+
+  TEMPLATE_NAME=$(pveam available -section system | grep "debian-12-standard" | head -1 | awk '{print $2}')
+
+  if [ -z "$TEMPLATE_NAME" ]; then
+    msg_error "Could not find debian-12-standard template"
+    exit 1
+  fi
+
+  msg_info "Downloading template: $TEMPLATE_NAME"
   pveam download $STORAGE $TEMPLATE_NAME || {
     msg_error "Failed to download template"
     exit 1
   }
+  msg_ok "Template downloaded: $TEMPLATE_NAME"
 fi
-msg_ok "Template: $TEMPLATE_NAME"
 
 # Create container
 msg_info "Creating LXC Container"
