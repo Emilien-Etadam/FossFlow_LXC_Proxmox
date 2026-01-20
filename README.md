@@ -45,16 +45,37 @@ Pour mettre à jour FossFLOW, exécuter le même script depuis le shell Proxmox.
 
 ## 🔧 Ce qui est installé
 
-- Node.js 20.x
-- FossFLOW (dernière release)
-- Service systemd `fossflow`
-- Stockage serveur activé dans `/opt/fossflow-data/diagrams`
+- **Node.js 20.x** (via NodeSource)
+- **FossFLOW v1.9.2** (dernière release depuis GitHub)
+- **serve** (pour servir le frontend statique)
+- **Deux services systemd** :
+  - `fossflow-frontend` : Interface web sur port **3000**
+  - `fossflow-backend` : API REST sur port **3001**
+- **Stockage persistant** : `/opt/fossflow-data/diagrams`
 
 ## 📝 Notes
 
 - Installation **native** (pas de Docker dans le LXC)
-- Stockage persistant des diagrammes côté serveur
+- Architecture **monorepo** avec frontend (React) et backend (Node.js/Express) séparés
+- Le frontend communique avec le backend via l'API `/api/storage/*`
+- Stockage serveur activé par défaut pour la persistance des diagrammes
 - Auto-save toutes les 5 secondes dans le navigateur
+
+## 🔍 Gestion des services
+
+```bash
+# Vérifier le statut
+systemctl status fossflow-frontend
+systemctl status fossflow-backend
+
+# Redémarrer les services
+systemctl restart fossflow-frontend
+systemctl restart fossflow-backend
+
+# Voir les logs
+journalctl -u fossflow-frontend -f
+journalctl -u fossflow-backend -f
+```
 
 ## 🔗 Liens
 
