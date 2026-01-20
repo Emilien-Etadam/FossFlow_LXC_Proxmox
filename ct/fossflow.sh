@@ -49,6 +49,61 @@ function update_script() {
 }
 
 start
+
+# Custom build_container function for external repository
+function build_container() {
+  msg_info "Creating LXC Container"
+  DISK_REF="$DISK_SIZE"
+  if [ "$var_os" == "alpine" ]; then
+    OSTYPE=alpine
+    OSVERSION=${OSVERSION:-3.19}
+    TEMPLATE="$CTID:vztmpl/$var_os-$var_version-default_*_amd64.tar.xz"
+  else
+    OSTYPE=$var_os
+    OSVERSION=$var_version
+    TEMPLATE="$CTID:vztmpl/$var_os-$var_version-standard_*_amd64.tar.zst"
+  fi
+
+  pct create "$CTID" "$PCT_OSTEMPLATE" \
+    -arch $(dpkg --print-architecture) \
+    -cores "$CORE_COUNT" \
+    -description "<div align='center'><img src='https://raw.githubusercontent.com/stan-smith/FossFLOW/master/packages/fossflow-app/public/favicon.svg' width='50'/><h3>FossFLOW LXC</h3></div>" \
+    -features nesting=$var_nesting \
+    -hostname "$HN" \
+    -memory "$RAM_SIZE" \
+    -net0 name=eth0,bridge=$BRG,ip=$NET \
+    -onboot 1 \
+    -ostype "$OSTYPE" \
+    -password "$PW" \
+    -rootfs $DISK_REF \
+    -swap "$var_swap" \
+    -tags proxmox-helper-scripts \
+    -unprivileged $var_unprivileged
+  msg_ok "LXC Container $CTID was successfully created"
+
+  msg_info "Starting LXC Container"
+  pct start "$CTID"
+  msg_ok "Started LXC Container"
+
+  msg_info "Configuring LXC Container"
+  sleep 2
+  pct push "$CTID" <(echo "export FUNCTIONS_FILE_PATH='$FUNCTIONS_FILE_PATH'") /etc/profile.d/env.sh
+
+  # Download and execute install script from this repository
+  INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/Emilien-Etadam/FossFlow_LXC_Proxmox/main/ct/fossflow-install"
+  INSTALL_SCRIPT=$(curl -fsSL "$INSTALL_SCRIPT_URL") || {
+    msg_error "Failed to download install script from $INSTALL_SCRIPT_URL"
+    exit 1
+  }
+
+  pct exec "$CTID" -- bash -c "$INSTALL_SCRIPT" || {
+    msg_error "Installation failed"
+    exit 1
+  }
+
+  msg_ok "Customized LXC Container"
+}
+
 build_container
 description
 
