@@ -28,21 +28,49 @@ function msg_error() {
 APP="FossFLOW"
 CTID=$(pvesh get /cluster/nextid)
 TEMPLATE="debian-12-standard"
-TEMPLATE_STORAGE="local"
-
-# Find a storage that supports containers
-CONTAINER_STORAGE=$(pvesm status -content rootdir | awk 'NR>1 {print $1}' | head -1)
-if [ -z "$CONTAINER_STORAGE" ]; then
-  echo -e "${RD}[ERROR]${CL} No storage found that supports containers"
-  exit 1
-fi
-
 DISK_SIZE="4"
 CPU_CORES="2"
 RAM_SIZE="1024"
 BRIDGE="vmbr0"
 HOSTNAME="fossflow"
 PASSWORD=$(openssl rand -base64 12)
+
+# Function to select storage
+function select_storage() {
+  local storage_type=$1
+  local content_type=$2
+
+  mapfile -t STORAGE_MENU < <(pvesm status -content "$content_type" | awk 'NR>1 {print $1}')
+
+  if [ ${#STORAGE_MENU[@]} -eq 0 ]; then
+    msg_error "No storage found that supports $content_type"
+    exit 1
+  fi
+
+  if [ ${#STORAGE_MENU[@]} -eq 1 ]; then
+    echo "${STORAGE_MENU[0]}"
+    return
+  fi
+
+  msg_info "Select $storage_type storage:"
+  PS3="Enter selection: "
+  select storage in "${STORAGE_MENU[@]}"; do
+    if [[ -n "$storage" ]]; then
+      echo "$storage"
+      return
+    else
+      msg_error "Invalid selection"
+    fi
+  done
+}
+
+# Select storage for templates
+msg_info "Selecting storage for templates..."
+TEMPLATE_STORAGE=$(select_storage "Template" "vztmpl")
+
+# Select storage for containers
+msg_info "Selecting storage for container..."
+CONTAINER_STORAGE=$(select_storage "Container" "rootdir")
 
 # Display configuration
 clear
@@ -75,7 +103,9 @@ msg_info "Checking for template"
 EXISTING_TEMPLATE=$(pveam list $TEMPLATE_STORAGE 2>/dev/null | grep "debian-12-standard" | head -1 | awk '{print $1}')
 
 if [ -n "$EXISTING_TEMPLATE" ]; then
-  TEMPLATE_NAME="$EXISTING_TEMPLATE"
+  # Extract just the filename from "storage:vztmpl/filename"
+  TEMPLATE_NAME=$(basename "$EXISTING_TEMPLATE")
+  TEMPLATE_PATH="$EXISTING_TEMPLATE"
   msg_ok "Template already downloaded: $TEMPLATE_NAME"
 else
   # List available templates and find debian-12-standard
@@ -94,12 +124,13 @@ else
     msg_error "Failed to download template"
     exit 1
   }
+  TEMPLATE_PATH="$TEMPLATE_STORAGE:vztmpl/$TEMPLATE_NAME"
   msg_ok "Template downloaded: $TEMPLATE_NAME"
 fi
 
 # Create container
 msg_info "Creating LXC Container"
-pct create $CTID $TEMPLATE_STORAGE:vztmpl/$TEMPLATE_NAME \
+pct create $CTID "$TEMPLATE_PATH" \
   -arch amd64 \
   -cores $CPU_CORES \
   -description "FossFLOW - Isometric Infrastructure Diagram Tool" \
