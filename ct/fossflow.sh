@@ -28,7 +28,15 @@ function msg_error() {
 APP="FossFLOW"
 CTID=$(pvesh get /cluster/nextid)
 TEMPLATE="debian-12-standard"
-STORAGE="local"
+TEMPLATE_STORAGE="local"
+
+# Find a storage that supports containers
+CONTAINER_STORAGE=$(pvesm status -content rootdir | awk 'NR>1 {print $1}' | head -1)
+if [ -z "$CONTAINER_STORAGE" ]; then
+  echo -e "${RD}[ERROR]${CL} No storage found that supports containers"
+  exit 1
+fi
+
 DISK_SIZE="4"
 CPU_CORES="2"
 RAM_SIZE="1024"
@@ -54,6 +62,8 @@ echo -e "  📦  Container Type: ${BL}Unprivileged${CL}"
 echo -e "  💾  Disk Size: ${BL}${DISK_SIZE} GB${CL}"
 echo -e "  🧠  CPU Cores: ${BL}${CPU_CORES}${CL}"
 echo -e "  🛠️  RAM Size: ${BL}${RAM_SIZE} MiB${CL}"
+echo -e "  💿  Template Storage: ${BL}${TEMPLATE_STORAGE}${CL}"
+echo -e "  📁  Container Storage: ${BL}${CONTAINER_STORAGE}${CL}"
 echo -e ""
 msg_info "Creating a ${APP} LXC using the above default settings"
 echo -e ""
@@ -62,7 +72,7 @@ echo -e ""
 msg_info "Checking for template"
 
 # First, check what's already downloaded
-EXISTING_TEMPLATE=$(pveam list $STORAGE 2>/dev/null | grep "debian-12-standard" | head -1 | awk '{print $1}')
+EXISTING_TEMPLATE=$(pveam list $TEMPLATE_STORAGE 2>/dev/null | grep "debian-12-standard" | head -1 | awk '{print $1}')
 
 if [ -n "$EXISTING_TEMPLATE" ]; then
   TEMPLATE_NAME="$EXISTING_TEMPLATE"
@@ -80,7 +90,7 @@ else
   fi
 
   msg_info "Downloading template: $TEMPLATE_NAME"
-  pveam download $STORAGE $TEMPLATE_NAME || {
+  pveam download $TEMPLATE_STORAGE $TEMPLATE_NAME || {
     msg_error "Failed to download template"
     exit 1
   }
@@ -89,7 +99,7 @@ fi
 
 # Create container
 msg_info "Creating LXC Container"
-pct create $CTID $STORAGE:vztmpl/$TEMPLATE_NAME \
+pct create $CTID $TEMPLATE_STORAGE:vztmpl/$TEMPLATE_NAME \
   -arch amd64 \
   -cores $CPU_CORES \
   -description "FossFLOW - Isometric Infrastructure Diagram Tool" \
@@ -100,7 +110,7 @@ pct create $CTID $STORAGE:vztmpl/$TEMPLATE_NAME \
   -onboot 1 \
   -ostype debian \
   -password $PASSWORD \
-  -rootfs $STORAGE:$DISK_SIZE \
+  -rootfs $CONTAINER_STORAGE:$DISK_SIZE \
   -swap 512 \
   -unprivileged 1 || {
     msg_error "Failed to create container"
