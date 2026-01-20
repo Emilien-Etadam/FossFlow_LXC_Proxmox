@@ -28,9 +28,8 @@ Pour mettre à jour FossFLOW, exécuter le même script depuis le shell Proxmox.
 
 ```
 ├── ct/
-│   └── fossflow.sh          # Script principal (création LXC + update)
-├── install/
-│   └── fossflow-install.sh  # Script d'installation dans le LXC
+│   ├── fossflow.sh          # Script principal (création LXC + update)
+│   └── fossflow-install     # Script d'installation dans le LXC
 └── frontend/
     └── public/json/
         └── fossflow.json    # Métadonnées
