@@ -99,9 +99,9 @@ After=network.target fossflow-backend.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/fossflow/packages/fossflow-app/dist
+WorkingDirectory=/opt/fossflow/packages/fossflow-app/build
 Environment=NODE_ENV=production
-ExecStart=/usr/local/bin/serve -s . -l 3000 --no-port-switching
+ExecStart=/bin/serve -s . -l 3000 --no-port-switching
 Restart=on-failure
 RestartSec=10
 
